@@ -81,7 +81,18 @@ sudo apt full-upgrade
 
 ## Create a shared connection
 
-Install dnsmasq and enable it.
+### Configure interfaces
+
+```txt
+nmcli c add type wifi ifname wlan0 con-name wlan autoconnect yes ssid nanopi_r1 mode ap
+nmcli c modify wlan 802-11-wireless.band bg wifi-sec.key-mgmt wpa-psk wifi-sec.psk "YourPasswordHere" ipv4.method shared ipv4.addresses 172.31.87.1/24
+nmcli c up wlan
+nmcli c modify "Wired connection 1" con-name wan
+nmcli c modify "Wired connection 2" ifname eth1 ipv4.method shared con-name lan ipv4.addresses 172.31.86.1/24
+nmcli c up lan
+```
+
+### Install dnsmasq and enable it
 
 ```txt
 sudo apt install dnsmasq
@@ -115,8 +126,8 @@ dhcp-option=subnet1,3,172.31.86.1
 dhcp-option=subnet2,3,172.31.87.1
 
 # Set DNS server as Router.
-dhcp-option=subnet1,6,8.8.8.8,8.8.4.4
-dhcp-option=subnet2,6,8.8.8.8,8.8.4.4
+dhcp-option=subnet1,6,172.31.86.1
+dhcp-option=subnet2,6,172.31.87.1
 
 # Logging.
 log-facility=/var/log/dnsmasq.log   # logfile path.
@@ -125,22 +136,64 @@ log-queries # log queries.
 log-dhcp    # log dhcp related messages.
 ```
 
-Configure interfaces.
-
-```txt
-nmcli c add type wifi ifname wlan0 con-name wlan autoconnect yes ssid nanopi_r1 mode ap
-nmcli c modify wlan 802-11-wireless.band bg wifi-sec.key-mgmt wpa-psk wifi-sec.psk "YourPasswordHere" ipv4.method shared ipv4.addresses 172.31.87.1/24
-nmcli c up wlan
-nmcli c modify "Wired connection 1" con-name wan
-nmcli c modify "Wired connection 2" ifname eth1 ipv4.method shared con-name lan ipv4.addresses 172.31.86.1/24
-nmcli c up lan
-```
-
 Enable and (re)start `dnsmasq`
 
 ```txt
 sudo systemctl enable dnsmasq
 sudo systemctl restart dnsmasq
+```
+
+### Configure stubby
+
+Install Stubby
+
+```txt
+sudo apt install stubby
+```
+
+Edit configuration
+
+```txt
+sudo vi /etc/stubby/stubby.yml
+```
+
+Change this configuration:
+
+```txt
+round_robin_upstreams: 0
+```
+
+It is usually `1`, so change it to `0`.
+
+Locate `DEFAULT UPSTREAMS`, remove everything bellow the line until you find `OPTIONAL UPSTREAMS`. Add the lines bellow:
+
+```txt
+- address_data: 76.76.2.22
+  tls_auth_name: "<your resolver id>.dns.controld.com"
+```
+
+You can get the `<your resolver id>` from your account.
+
+You will end up with something close to this:
+
+```txt
+upstream_recursive_servers:
+############################ DEFAULT UPSTREAMS  ################################
+- address_data: 76.76.2.22
+  tls_auth_name: "xxxxxxxxxx.dns.controld.com"
+############################ OPTIONAL UPSTREAMS  ###############################
+####### IPv4 addresses ######
+### Anycast services ###
+## Quad 9 'secure' service - Filters, does DNSSEC, doesn't send ECS
+#  - address_data: 9.9.9.9
+#    tls_auth_name: "dns.quad9.net"
+```
+
+Enable and (re)start `stubby`
+
+```txt
+sudo systemctl enable stubby
+sudo systemctl restart stubby
 ```
 
 ## OpenVPN Client
